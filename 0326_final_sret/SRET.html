@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Self Referential Encoding Task</title>
+<style>
+  * { -webkit-tap-highlight-color: transparent; }
+  body {
+    background: #000;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 0 20px;
+    box-sizing: border-box;
+    touch-action: manipulation;
+  }
+  .screen { display: none; max-width: 700px; text-align: center; line-height: 1.7; }
+  .screen.active { display: block; }
+  #progress { font-size: 14px; margin-bottom: 40px; }
+  #sentence-text { margin-bottom: 60px; font-size: 26px; }
+  #response-hint { font-size: 14px; }
+
+  /* First screen: device detection (whole page is tappable) */
+  #screen-device { font-size: 24px; }
+
+  /* Mobile start button */
+  #start-btn {
+    margin-top: 30px;
+    padding: 16px 40px;
+    font-size: 22px;
+    color: #fff;
+    background: #333;
+    border: 2px solid #777;
+    border-radius: 12px;
+  }
+
+  #key-reminder {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 30px;
+    text-align: center;
+    font-size: 16px;
+    color: #bbb;
+  }
+  body:not(.mobile).in-trial #key-reminder { display: block; }
+
+  /* Mobile response buttons (only shown on phones, during trials) */
+  #mobile-buttons {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    gap: 16px;
+    box-sizing: border-box;
+    background: #000;
+  }
+  body.mobile.in-trial #mobile-buttons { display: flex; }
+  body.mobile.in-trial { padding-bottom: 140px; }
+  .resp-btn {
+    flex: 1;
+    min-height: 90px;
+    font-size: 20px;
+    font-weight: bold;
+    color: #fff;
+    border: 2px solid #999;
+    border-radius: 14px;
+    background: #222;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  .resp-btn:active { background: #555; }
+
+  body.mobile #sentence-text { font-size: 22px; margin-bottom: 30px; }
+  body.mobile .screen { font-size: 18px; }
+</style>
+</head>
+<body>
+
+<!-- Screen 0: device detection -->
+<div id="screen-device" class="screen active">
+  <p>Tap the screen<br>or<br>press SPACE<br>to continue.</p>
+</div>
+
+<!-- Welcome: computer version -->
+<div id="screen-welcome" class="screen">
+  <p>Welcome to the Self Referential Encoding Task. In this task, you will be presented with sentences one at a time.</p>
+  <br>
+  <p>Press the LEFT arrow key if you think the sentence does NOT describe you. Press the RIGHT arrow key if it does describe you.</p>
+  <br>
+  <p>Please respond as quickly and accurately as possible. Press SPACE to begin.</p>
+</div>
+
+<!-- Welcome: phone version -->
+<div id="screen-welcome-mobile" class="screen">
+  <p>Welcome to the Self Referential Encoding Task. In this task, you will be presented with sentences one at a time.</p>
+  <br>
+  <p>Tap the LEFT button if you think the sentence does NOT describe you. Tap the RIGHT button if it does describe you.</p>
+  <br>
+  <p>Please respond as quickly and accurately as possible.</p>
+  <button id="start-btn" type="button">Begin</button>
+</div>
+
+<div id="screen-trial" class="screen">
+  <div id="progress"></div>
+  <div id="sentence-text"></div>
+</div>
+
+<div id="screen-thanks" class="screen">
+  <p>The task is now complete. Thank you for participating!</p>
+  <br>
+  <p>You may now close this page and return to REDCap.</p>
+</div>
+
+<div id="screen-error" class="screen">
+  <p id="error-text"></p>
+</div>
+
+<!-- Left / right buttons, phone only -->
+<div id="mobile-buttons">
+  <button id="btn-left"  class="resp-btn" type="button">&larr;<br>Does NOT<br>describe me</button>
+  <button id="btn-right" class="resp-btn" type="button">&rarr;<br>Describes<br>me</button>
+</div>
+
+<div id="key-reminder">
+  LEFT = does NOT describe me
+  &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+  RIGHT = describes me
+</div>
+
+<script>
+  const SENTENCES = [
+    "When I feel distressed, I try to take a balanced view of events",
+    "When I have a hard time, I try to keep my negative emotions in balance",
+    "When I'm feeling down, I try to approach my feelings with curiosity and openness",
+    "When I fail at something important to me, I try to keep things in perspective",
+    "I find it easy to forgive myself",
+    "I am hopeful about my future",
+    "I am gentle toward and supportive of myself",
+    "When I feel distressed, I try to be loving toward myself",
+    "When I feel distressed, I am kind to myself",
+    "I am tolerant of my flaws and inadequacies",
+    "I try to be understanding and patient toward those aspects of myself that I don't like",
+    "When I go through a hard time, I give myself the care that I need",
+    "When things are going badly for me, I see the difficulties as part of life that everyone goes through",
+    "I try to see my failings as part of being human",
+    "When I feel distressed, I try to remind myself that most people feel inadequate sometimes",
+    "When I feel down, I remind myself that there are lots of other people in the world feeling like I am",
+    "I am often disappointed in myself",
+    "I remember and dwell on my faults",
+    "I am disgusted with myself",
+    "I find it difficult to control my anger and frustration at myself",
+    "I am disapproving and judgmental of my flaws and inadequacies",
+    "I am often critical and judgmental of myself",
+    "When times are difficult, I tend to be tough on myself",
+    "I am intolerant and impatient toward the aspects of myself that I don't like",
+    "When I fail at something that is important to me, I tend to feel lonely",
+    "When I'm feeling down, I tend to feel like most other people are probably happier than I am",
+    "When I'm struggling, I tend to feel like other people must be having an easier time",
+    "When I feel distressed, I think that I am the only person who feels inadequate",
+    "When I think about my faults, I feel alone and cut off from the rest of the world",
+    "When I feel distressed, I tend to blow events out of proportion",
+    "When I have a hard time, I get carried away by my negative emotions",
+    "When I am feeling down, I tend to obsess and fixate on everything that is wrong"
+  ];
+
+  // ── Pig config ──────────────────────────────────────────────────────────────
+  const PIG_URL   = 'https://wilbur.chm.wisc.edu';
+  const TASK_CODE = 'sret';
+
+  // ── URL params (from the link REDCap displays) ──────────────────────────────
+  const params        = new URLSearchParams(window.location.search);
+  const participantId = params.get("participant_id") || 'MISSING_ID';
+  const eventName     = params.get("event")           || 'UNKNOWN_EVENT';
+
+  // ── Seeded shuffle ──────────────────────────────────────────────────────────
+  function seededRandom(seedStr) {
+    let h = 1779033703 ^ seedStr.length;
+
+    for (let i = 0; i < seedStr.length; i++) {
+      h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+
+    let seed = h >>> 0;
+
+    return function () {
+      seed |= 0;
+      seed = (seed + 0x6D2B79F5) | 0;
+
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function seededShuffle(array, seedStr) {
+    const rand = seededRandom(seedStr);
+    const result = array.slice();
+
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+
+    return result;
+  }
+
+  // ── State ───────────────────────────────────────────────────────────────────
+  let sentences       = [];
+  let currentTrial    = 0;
+  let trialStartTime  = 0;
+  let currentScreen   = 'device';
+  let awaitingKey     = false;
+  let runId           = null;
+  let device          = null;   // 'computer' or 'phone', set on the first screen
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + id).classList.add('active');
+    currentScreen = id;
+    document.body.classList.toggle('in-trial', id === 'trial');
+  }
+
+  function showFatalError(message) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('screen-error');
+    el.querySelector('#error-text').textContent = message;
+    el.classList.add('active');
+    currentScreen = 'error';
+    document.body.classList.remove('in-trial');
+  }
+
+  // ── Device detection─────────────────────────────────────────
+  function chooseDevice(type) {
+    if (currentScreen !== 'device') {
+      return;
+    }
+
+    device = type;
+
+    if (device === 'phone') {
+      document.body.classList.add('mobile');
+      showScreen('welcome-mobile');
+    } else {
+      showScreen('welcome');
+    }
+  }
+
+  document.addEventListener('pointerdown', e => {
+    if (currentScreen !== 'device') {
+      return;
+    }
+
+    chooseDevice(e.pointerType === 'mouse' ? 'computer' : 'phone');
+  });
+
+  // ── Start a run ─────────────────────────────────────────────────────────────
+  async function startRun() {
+    const res = await fetch(`${PIG_URL}/v1/task/${TASK_CODE}/run`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        parameters: {
+          participant_id: participantId,
+          session: eventName
+        }
+      })
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Could not start run (HTTP ${res.status}): ${body}`);
+    }
+
+    const data = await res.json();
+    return data.run_id;
+  }
+
+  // ── Send one event ──────────────────────────────────────────────────────────
+  function postEvent(eventId, data) {
+    fetch(`${PIG_URL}/v1/task/${TASK_CODE}/run/${runId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        events: {
+          [eventId]: {
+            timestamp: new Date().toISOString(),
+            data
+          }
+        }
+      })
+    }).then(res => {
+      if (!res.ok) {
+        res.text().then(body =>
+          console.error(
+            `Event ${eventId} rejected (HTTP ${res.status}):`,
+            body
+          )
+        );
+      }
+    }).catch(err =>
+      console.error(`Event ${eventId} POST failed:`, err)
+    );
+  }
+
+  // ── Log page visibility changes ─────────────────────────────────────────────
+  // This ONLY logs that the page became hidden/visible.
+  // It does NOT stop, pause, reset, or abandon the task.
+  document.addEventListener('visibilitychange', () => {
+    // Don't try to log anything before a Pig run has been created.
+    if (!runId) {
+      return;
+    }
+
+    if (document.hidden) {
+      console.log(
+        `Participant left the task page at trial ${currentTrial + 1}.`
+      );
+
+      postEvent('page_hidden', {
+        type: 'page_visibility',
+        trial: currentTrial + 1
+      });
+
+    } else {
+      console.log(
+        `Participant returned to the task page at trial ${currentTrial + 1}.`
+      );
+
+      postEvent('page_visible', {
+        type: 'page_visibility',
+        trial: currentTrial + 1
+      });
+    }
+  });
+
+  function postTrial(trialData) {
+    postEvent(String(trialData.trial), {
+      type: 'trial',
+      sentence: trialData.sentence,
+      response: trialData.response,
+      key_pressed: trialData.key_pressed,
+      reaction_time_s: trialData.reaction_time
+    });
+  }
+
+  // ── Start experiment ────────────────────────────────────────────────────────
+  async function startExperiment() {
+    if (currentScreen !== 'welcome' && currentScreen !== 'welcome-mobile') {
+      return;
+    }
+    currentScreen = 'starting';
+
+    sentences    = seededShuffle(SENTENCES, participantId);
+    currentTrial = 0;
+
+    try {
+      runId = await startRun();
+    } catch (err) {
+      console.error(err);
+
+      showFatalError(
+        'This task could not connect to the data server, so nothing has been ' +
+        'recorded. Please let the study team know before continuing.'
+      );
+
+      return;
+    }
+
+    postEvent('0', {
+      type: 'task_start',
+      device: device
+    });
+
+    showScreen('trial');
+    loadTrial();
+  }
+
+  function loadTrial() {
+    if (currentTrial >= sentences.length) {
+      endExperiment();
+      return;
+    }
+
+    document.getElementById('progress').textContent =
+      `${currentTrial + 1} of ${sentences.length}`;
+
+    document.getElementById('sentence-text').textContent =
+      sentences[currentTrial];
+
+    trialStartTime = performance.now();
+    awaitingKey = true;
+  }
+
+  function recordResponse(key) {
+    if (!awaitingKey) {
+      return;
+    }
+
+    awaitingKey = false;
+
+    const rt = (
+      (performance.now() - trialStartTime) / 1000
+    ).toFixed(3);
+
+    const trialData = {
+      trial: currentTrial + 1,
+      sentence: sentences[currentTrial],
+      key_pressed: key,
+      response: key === 'right' ? 'yes' : 'no',
+      reaction_time: rt
+    };
+
+    postTrial(trialData);
+
+    currentTrial++;
+
+    setTimeout(loadTrial, 200);
+  }
+
+  // ── End experiment ──────────────────────────────────────────────────────────
+  function endExperiment() {
+    fetch(
+      `${PIG_URL}/v1/task/${TASK_CODE}/run/${runId}/finalize`,
+      {
+        method: 'POST'
+      }
+    ).catch(err =>
+      console.error('Finalize POST failed:', err)
+    );
+
+    showScreen('thanks');
+  }
+
+  // ── Phone buttons ───────────────────────────────────────────────────────────
+  // pointerdown (not click) so reaction times aren't delayed by click latency.
+  function bindResponseButton(id, key) {
+    document.getElementById(id).addEventListener('pointerdown', e => {
+      e.preventDefault();
+      if (currentScreen === 'trial') {
+        recordResponse(key);
+      }
+    });
+  }
+
+  bindResponseButton('btn-left',  'left');
+  bindResponseButton('btn-right', 'right');
+
+  document.getElementById('start-btn').addEventListener('click', () => {
+    if (currentScreen === 'welcome-mobile') {
+      startExperiment();
+    }
+  });
+
+  // ── Keyboard ────────────────────────────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (
+      currentScreen === 'device' &&
+      e.code === 'Space'
+    ) {
+      e.preventDefault();
+      chooseDevice('computer');
+
+    } else if (
+      currentScreen === 'welcome' &&
+      e.code === 'Space'
+    ) {
+      e.preventDefault();
+      startExperiment();
+
+    } else if (
+      currentScreen === 'trial'
+    ) {
+
+      if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        recordResponse('left');
+      }
+
+      if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        recordResponse('right');
+      }
+
+    } else if (
+      currentScreen === 'thanks' &&
+      e.code === 'Space'
+    ) {
+      e.preventDefault();
+      window.close();
+    }
+  });
+</script>
+</body>
+</html>
